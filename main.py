@@ -1,4 +1,6 @@
+import os
 from fastapi import FastAPI
+import uvicorn
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import numpy as np
