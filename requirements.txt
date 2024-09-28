@@ -1,6 +1,15 @@
 fastapi
-pandas
+uvicorn
 numpy
+pandas
 scikit-learn
 matplotlib
 seaborn
+pyparsing 
+pillow
+packaging
+kiwisolver
+fonttools
+cycler
+contourpy
+
