@@ -93,12 +93,6 @@ neural_model.fit(X, y)
 def predict_gold_price_neural(open_value: float, vol_value: float) -> float:
     return neural_model.predict(np.array([[open_value, vol_value]]))[0]  # Lấy giá trị đầu tiên từ mảng kết quả
 
-
-# Dự đoán giá trị y cho Neural Network
-neural_y_pred = neural_model.predict(X)
-mse_neural = calculate_mse(y, neural_y_pred)
-r2_neural = calculate_r2(y, neural_y_pred)
-
 # Định nghĩa lớp dữ liệu đầu vào
 class PredictionInput(BaseModel):
     open: float
@@ -191,55 +185,58 @@ async def get_form():
                     <button type="button" class="btn btn-primary" onclick="predict()">Dự đoán</button>
                 </form>
             </div>
-
-            <div class="result-container">
-                <div id="result"></div>
-            </div>
+            <div class="result-container" id="result"></div>
         </div>
-
         <script>
-        async function predict() {
-            const open = document.getElementById('open').value;
-            const vol = document.getElementById('vol').value;
+            async function predict() {
+                const open = document.getElementById('open').value;
+                const vol = document.getElementById('vol').value;
 
-            try {
-                const response = await fetch('/predict', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        open: parseFloat(open),
-                        vol: parseFloat(vol)
-                    }),
-                });
+                try {
+                    const response = await fetch('/predict', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            open: parseFloat(open),
+                            vol: parseFloat(vol)
+                        }),
+                    });
 
-                if (!response.ok) {
-                    throw new Error('Mã phản hồi không hợp lệ');
+                    const data = await response.json();
+                    const resultDiv = document.getElementById('result');
+
+                    if (data.error) {
+                        resultDiv.innerHTML = `
+                            <p class="text-danger">Đã xảy ra lỗi: ${data.error}</p>
+                        `;
+                    } else {
+                        resultDiv.innerHTML = `
+                            <h4>Kết quả Dự đoán</h4>
+                            <ul>
+                                <li>Hồi quy tuyến tính: ${data.predicted_linear.toFixed(2)} VNĐ</li>
+                                <li>Hồi quy Ridge: ${data.predicted_ridge.toFixed(2)} VNĐ</li>
+                                <li>Hồi quy Lasso: ${data.predicted_lasso.toFixed(2)} VNĐ</li>
+                                <li>Mạng nơ-ron: ${data.predicted_neural.toFixed(2)} VNĐ</li>
+                            </ul>
+                            <h5>MSE và R²:</h5>
+                            <ul>
+                                <li>MSE (Hồi quy tuyến tính): ${data.mse_linear.toFixed(2)}</li>
+                                <li>R² (Hồi quy tuyến tính): ${data.r2_linear.toFixed(2)}</li>
+                                <li>MSE (Hồi quy Ridge): ${data.mse_ridge.toFixed(2)}</li>
+                                <li>R² (Hồi quy Ridge): ${data.r2_ridge.toFixed(2)}</li>
+                                <li>MSE (Hồi quy Lasso): ${data.mse_lasso.toFixed(2)}</li>
+                                <li>R² (Hồi quy Lasso): ${data.r2_lasso.toFixed(2)}</li>
+                            </ul>
+                        `;
+                    }
+                } catch (error) {
+                    document.getElementById('result').innerHTML = `
+                        <p class="text-danger">Đã xảy ra lỗi: ${error.message}</p>
+                    `;
                 }
-
-                const data = await response.json();
-                document.getElementById('result').innerHTML = `
-                    <h4>Kết quả dự đoán:</h4>
-                    <p>Giá vàng dự đoán theo Hồi quy tuyến tính: ${data.predicted_linear.toFixed(2)} USD</p>
-                    <p>Giá vàng dự đoán theo Hồi quy Lasso: ${data.predicted_lasso.toFixed(2)} USD</p>
-                    <p>Giá vàng dự đoán theo Neural Network (ReLU): ${data.predicted_neural.toFixed(2)} USD</p>
-                    <div>
-                        <h5>MSE và R²:</h5>
-                        <p>MSE Hồi quy tuyến tính: ${data.mse_linear.toFixed(2)}</p>
-                        <p>R² Hồi quy tuyến tính: ${data.r2_linear.toFixed(2)}</p>
-                        <p>MSE Hồi quy Lasso: ${data.mse_lasso.toFixed(2)}</p>
-                        <p>R² Hồi quy Lasso: ${data.r2_lasso.toFixed(2)}</p>
-                        <p>MSE Neural Network (ReLU): ${data.mse_neural.toFixed(2)}</p>
-                        <p>R² Neural Network (ReLU): ${data.r2_neural.toFixed(2)}</p>
-                    </div>
-                `;
-            } catch (error) {
-                document.getElementById('result').innerHTML = `
-                    <p class="text-danger">Đã xảy ra lỗi: ${error.message}</p>
-                `;
             }
-        }
         </script>
     </body>
     </html>
