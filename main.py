@@ -70,16 +70,24 @@ async def predict(input_data: PredictionInput):
 
     try:
         # Dự đoán giá vàng
-        predicted_linear = predict_gold_price_linear(open_value, vol_value)
-        predicted_lasso = predict_gold_price_lasso(open_value, vol_value)
+        predicted_linear = predict_gold_price(open_value, vol_value)
         predicted_ridge = predict_gold_price_ridge(open_value, vol_value)
+        predicted_lasso = predict_gold_price_lasso_sklearn(open_value, vol_value)
         predicted_neural = predict_gold_price_neural(open_value, vol_value)
 
         return {
             "predicted_linear": predicted_linear,
-            "predicted_lasso": predicted_lasso,
             "predicted_ridge": predicted_ridge,
-            "predicted_neural": predicted_neural
+            "predicted_lasso": predicted_lasso,
+            "predicted_neural": predicted_neural,
+            "mse_linear": mse_linear,
+            "r2_linear": r2_linear,
+            "mse_ridge": mse_ridge,
+            "r2_ridge": r2_ridge,
+            "mse_lasso": mse_lasso,
+            "r2_lasso": r2_lasso,
+            "mse_neural": mse_neural,
+            "r2_neural": r2_neural
         }
     except Exception as e:
         return {"error": str(e)}
@@ -93,60 +101,103 @@ async def get_form():
     <head>
         <title>Dự đoán giá vàng</title>
         <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+        <style>
+            body {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                grid-template-columns: 1fr 2fr;
+                gap: 20px;
+                background-color: #f8f8f8; /* Màu nền nhạt */
+            }
+
+            .container {
+                display: grid;
+                grid-template-columns: 1fr 2fr;
+                gap: 20px;
+            }
+
+            .form-container {
+                background-color: #f0f0f0;
+                padding: 20px;
+                border-radius: 5px;
+                text-align: center; /* Căn giữa nội dung form */
+            }
+
+            .result-container {
+                background-color: #fff;
+                padding: 20px;
+                border-radius: 5px;
+            }
+
+        </style>
     </head>
     <body>
         <div class="container">
-            <h2 class="text-center">Dự đoán giá vàng</h2>
-            <form id="predictionForm">
-                <div class="form-group">
-                    <label for="open">Giá mở cửa:</label>
-                    <input type="number" id="open" name="open" class="form-control" step="any" required>
-                </div>
-                <div class="form-group">
-                    <label for="vol">VoL (K):</label>
-                    <input type="number" id="vol" name="vol" class="form-control" step="any" required>
-                </div>
-                <button type="button" class="btn btn-primary" onclick="predict()">Dự đoán</button>
-            </form>
-            <div id="result" style="margin-top: 20px;"></div>
+            <div class="form-container">
+                <h2 class="card-title text-center">Dự đoán giá vàng</h2>
+                <form id="predictionForm">
+                    <div class="form-group">
+                        <label for="open">Giá mở cửa:</label>
+                        <input type="number" id="open" name="open" class="form-control" step="any" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="vol">VoL (K):</label>
+                        <input type="number" id="vol" name="vol" class="form-control" step="any" required>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="predict()">Dự đoán</button>
+                </form>
+            </div>
+
+            <div class="result-container">
+                <div id="result"></div>
+            </div>
         </div>
+
         <script>
-            async function predict() {
-                const open = document.getElementById('open').value;
-                const vol = document.getElementById('vol').value;
+        async function predict() {
+            const open = document.getElementById('open').value;
+            const vol = document.getElementById('vol').value;
 
-                try {
-                    const response = await fetch('/predict', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            open: parseFloat(open),
-                            vol: parseFloat(vol)
-                        }),
-                    });
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        open: parseFloat(open),
+                        vol: parseFloat(vol)
+                    }),
+                });
 
-                    const data = await response.json();
-                    const resultDiv = document.getElementById('result');
-
-                    if (data.error) {
-                        resultDiv.innerHTML = `<p class="text-danger">Đã xảy ra lỗi: ${data.error}</p>`;
-                    } else {
-                        resultDiv.innerHTML = `
-                            <h4>Kết quả Dự đoán</h4>
-                            <ul>
-                                <li>Hồi quy Tuyến tính: ${data.predicted_linear.toFixed(2)} VNĐ</li>
-                                <li>Hồi quy Lasso: ${data.predicted_lasso.toFixed(2)} VNĐ</li>
-                                <li>Hồi quy Ridge: ${data.predicted_ridge.toFixed(2)} VNĐ</li>
-                                <li>Mạng nơ-ron: ${data.predicted_neural.toFixed(2)} VNĐ</li>
-                            </ul>
-                        `;
-                    }
-                } catch (error) {
-                    document.getElementById('result').innerHTML = `<p class="text-danger">Đã xảy ra lỗi: ${error.message}</p>`;
+                if (!response.ok) {
+                    throw new Error('Mã phản hồi không hợp lệ');
                 }
+
+                const data = await response.json();
+                document.getElementById('result').innerHTML = `
+                    <h4>Kết quả dự đoán:</h4>
+                    <p>Giá vàng dự đoán theo Hồi quy tuyến tính: ${data.predicted_linear.toFixed(2)} USD</p>
+                    <p>Giá vàng dự đoán theo Hồi quy Lasso: ${data.predicted_lasso.toFixed(2)} USD</p>
+                    <p>Giá vàng dự đoán theo Neural Network (ReLU): ${data.predicted_neural.toFixed(2)} USD</p>
+                    <div>
+                        <h5>MSE và R²:</h5>
+                        <p>MSE Hồi quy tuyến tính: ${data.mse_linear.toFixed(2)}</p>
+                        <p>R² Hồi quy tuyến tính: ${data.r2_linear.toFixed(2)}</p>
+                        <p>MSE Hồi quy Lasso: ${data.mse_lasso.toFixed(2)}</p>
+                        <p>R² Hồi quy Lasso: ${data.r2_lasso.toFixed(2)}</p>
+                        <p>MSE Neural Network (ReLU): ${data.mse_neural.toFixed(2)}</p>
+                        <p>R² Neural Network (ReLU): ${data.r2_neural.toFixed(2)}</p>
+                    </div>
+                `;
+            } catch (error) {
+                document.getElementById('result').innerHTML = `
+                    <p class="text-danger">Đã xảy ra lỗi: ${error.message}</p>
+                `;
             }
+        }
         </script>
     </body>
     </html>
