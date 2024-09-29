@@ -17,45 +17,75 @@ df = pd.read_csv("Gia_Vang_2019_2022.csv")
 df.columns = ["Date", "Price", "Open", "Vol"]
 
 # Chuyển đổi tất cả các cột thành mảng NumPy
-x1 = np.array(df["Open"].values, dtype=float).reshape(-1, 1)  # Chuyển đổi thành ma trận cột
-x2 = np.array(df["Vol"].values, dtype=float).reshape(-1, 1)   # Chuyển đổi thành ma trận cột
+x1 = np.array(df["Open"].values, dtype=float)
+x2 = np.array(df["Vol"].values, dtype=float)
 y = np.array(df["Price"].values, dtype=float)
 
 # Số lượng quan sát
 N = len(y)
-X = np.hstack((x1, x2))  # Kết hợp x1 và x2 thành một ma trận
+alpha = 1.0  # Tham số điều chỉnh
+X = np.column_stack((x1, x2))
 
 # Hồi quy tuyến tính
-linear_model = LinearRegression()
-linear_model.fit(X, y)
+y_pred1 = np.zeros_like(y)
+m1 = (N * np.sum(x1 * y) - np.sum(x1) * np.sum(y)) / (N * np.sum(x1 ** 2) - (np.sum(x1) ** 2))
+y_pred1 += m1 * x1
+m2 = (N * np.sum(x2 * (y - y_pred1)) - np.sum(x2) * np.sum(y - y_pred1)) / (N * np.sum(x2 ** 2) - (np.sum(x2) ** 2))
+b = np.mean(y) - (m1 * np.mean(x1) + m2 * np.mean(x2))
+
+# Hàm dự đoán của hồi quy tuyến tính
+def predict_gold_price(open_value: float, vol_value: float) -> float:
+    return m1 * open_value + m2 * vol_value + b
+
+# Các hàm tính MSE và R²
+def calculate_mse(y_true, y_pred):
+    return np.mean((y_true - y_pred) ** 2)
+
+def calculate_r2(y_true, y_pred):
+    ss_total = np.sum((y_true - np.mean(y_true)) ** 2)
+    ss_residual = np.sum((y_true - y_pred) ** 2)
+    return 1 - (ss_residual / ss_total)
+
+# Dự đoán giá trị y (giá vàng) dựa vào x1 và x2
+y_pred_linear = m1 * x1 + m2 * x2 + b
+mse_linear = calculate_mse(y, y_pred_linear)
+r2_linear = calculate_r2(y, y_pred_linear)
 
 # Hồi quy Lasso
-lasso_model = Lasso(alpha=1.0, max_iter=1000)
+lasso_m1 = (N * np.sum(x1 * y) - np.sum(x1) * np.sum(y)) / (N * np.sum(x1 ** 2) + alpha - (np.sum(x1) ** 2))
+lasso_y_pred1 = lasso_m1 * x1
+lasso_m2 = (N * np.sum(x2 * (y - lasso_y_pred1)) - np.sum(x2) * np.sum(y - lasso_y_pred1)) / (N * np.sum(x2 ** 2) + alpha - (np.sum(x2) ** 2))
+lasso_b = np.mean(y) - (lasso_m1 * np.mean(x1) + lasso_m2 * np.mean(x2))
+
+# Hàm dự đoán cho hồi quy Lasso
+def predict_gold_price_lasso(open_value: float, vol_value: float) -> float:
+    return lasso_m1 * open_value + lasso_m2 * vol_value + lasso_b
+
+# Dự đoán giá trị y cho hồi quy Lasso
+lasso_y_pred = lasso_m1 * x1 + lasso_m2 * x2 + lasso_b
+mse_lasso = calculate_mse(y, lasso_y_pred)
+r2_lasso = calculate_r2(y, lasso_y_pred)
+
+# Sử dụng hàm Lasso trong thư viện scikit-learn
+lasso_model = Lasso(alpha=alpha, max_iter=1000)
 lasso_model.fit(X, y)
 
-# Hồi quy Ridge
-ridge_model = Ridge(alpha=1.0, max_iter=1000)
-ridge_model.fit(X, y)
-
+# Hàm dự đoán cho Lasso
+def predict_gold_price_lasso_sklearn(open_value: float, vol_value: float) -> float:
+    return lasso_model.predict(np.array([[open_value, vol_value]]))[0]
 # Neural Network Regression với ReLU
 neural_model = MLPRegressor(hidden_layer_sizes=(64, 32), max_iter=1000, activation='relu', solver='adam', random_state=0)
 neural_model.fit(X, y)
 
-# Hàm dự đoán cho hồi quy tuyến tính
-def predict_gold_price_linear(open_value: float, vol_value: float) -> float:
-    return linear_model.predict(np.array([[open_value, vol_value]]))[0]
-
-# Hàm dự đoán cho Lasso
-def predict_gold_price_lasso(open_value: float, vol_value: float) -> float:
-    return lasso_model.predict(np.array([[open_value, vol_value]]))[0]
-
-# Hàm dự đoán cho Ridge
-def predict_gold_price_ridge(open_value: float, vol_value: float) -> float:
-    return ridge_model.predict(np.array([[open_value, vol_value]]))[0]
-
-# Hàm dự đoán cho Neural Network
+# Hàm dự đoán cho Neural Network 
 def predict_gold_price_neural(open_value: float, vol_value: float) -> float:
-    return neural_model.predict(np.array([[open_value, vol_value]]))[0]
+    return neural_model.predict(np.array([[open_value, vol_value]]))[0]  # Lấy giá trị đầu tiên từ mảng kết quả
+
+
+# Dự đoán giá trị y cho Neural Network
+neural_y_pred = neural_model.predict(X)
+mse_neural = calculate_mse(y, neural_y_pred)
+r2_neural = calculate_r2(y, neural_y_pred)
 
 # Định nghĩa lớp dữ liệu đầu vào
 class PredictionInput(BaseModel):
@@ -71,19 +101,15 @@ async def predict(input_data: PredictionInput):
     try:
         # Dự đoán giá vàng
         predicted_linear = predict_gold_price(open_value, vol_value)
-        predicted_ridge = predict_gold_price_ridge(open_value, vol_value)
         predicted_lasso = predict_gold_price_lasso_sklearn(open_value, vol_value)
         predicted_neural = predict_gold_price_neural(open_value, vol_value)
 
         return {
             "predicted_linear": predicted_linear,
-            "predicted_ridge": predicted_ridge,
             "predicted_lasso": predicted_lasso,
             "predicted_neural": predicted_neural,
             "mse_linear": mse_linear,
             "r2_linear": r2_linear,
-            "mse_ridge": mse_ridge,
-            "r2_ridge": r2_ridge,
             "mse_lasso": mse_lasso,
             "r2_lasso": r2_lasso,
             "mse_neural": mse_neural,
