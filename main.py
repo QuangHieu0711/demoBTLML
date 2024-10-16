@@ -14,7 +14,7 @@ import numpy as np
 app = FastAPI()
 
 # Đọc dữ liệu từ tệp CSV
-df = pd.read_csv("Gia_Vang_moi.csv")
+df = pd.read_csv("Gia_Vang_2019_2022.csv")
 df.columns = ["Date", "Price", "Open", "Vol"]
 
 # Tiền xử lý dữ liệu
