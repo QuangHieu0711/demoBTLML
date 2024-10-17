@@ -20,66 +20,60 @@ df.columns = ["Date", "Price", "Open", "Vol"]
 # Tiền xử lý dữ liệu
 def preprocess_data(df):
     df.dropna(inplace=True)  # Loại bỏ các hàng chứa giá trị null
-    df.drop(columns=['Date'], inplace=True)  # Xóa cột 'Date'
+    df.drop(columns=['Date', 'Vol'], inplace=True)  # Xóa cột 'Date' và 'Vol'
     return df
 
 # Tiền xử lý dữ liệu
 df = preprocess_data(df)
 
 # Chuyển đổi dữ liệu thành mảng NumPy
-X = df[['Open', 'Vol']].values
+X = df[['Open']].values  # Chỉ giữ lại cột 'Open'
 y = df['Price'].values
 alpha = 0.1  # Tham số alpha cho hồi quy Lasso
 
 # Tính toán tham số hồi quy tuyến tính
 def linear_regression(X, y):
-    x1 = X[:, 0]  # Giá mở cửa
-    x2 = X[:, 1]  # Khối lượng
+    x = X[:, 0]  # Giá mở cửa
 
     N = len(y)
-    m1 = (N * np.sum(x1 * y) - np.sum(x1) * np.sum(y)) / (N * np.sum(x1 ** 2) - (np.sum(x1) ** 2))
-    y_pred1 = m1 * x1
-    m2 = (N * np.sum(x2 * (y - y_pred1)) - np.sum(x2) * np.sum(y - y_pred1)) / (N * np.sum(x2 ** 2) - (np.sum(x2) ** 2))
-    b = np.mean(y) - (m1 * np.mean(x1) + m2 * np.mean(x2))
-    return m1, m2, b
+    m = (N * np.sum(x * y) - np.sum(x) * np.sum(y)) / (N * np.sum(x ** 2) - (np.sum(x) ** 2))
+    b = np.mean(y) - (m * np.mean(x))
+    return m, b
 
 # Lấy tham số hồi quy tuyến tính
-m1, m2, b = linear_regression(X, y)
+m, b = linear_regression(X, y)
 
 # Dự đoán giá vàng bằng hồi quy tuyến tính
-def predict_gold_price_linear(open_value: float, vol_value: float) -> float:
-    return m1 * open_value + m2 * vol_value + b
+def predict_gold_price_linear(open_value: float) -> float:
+    return m * open_value + b
 
 # Hồi quy Lasso (tính toán thủ công)
 N = len(y)
-x1 = X[:, 0]  # Giá mở cửa
-x2 = X[:, 1]  # Khối lượng
+x = X[:, 0]  # Giá mở cửa
 
 # Tính toán tham số hồi quy Lasso
-lasso_m1 = (N * np.sum(x1 * y) - np.sum(x1) * np.sum(y)) / (N * np.sum(x1 ** 2) + alpha - (np.sum(x1) ** 2))
-lasso_y_pred1 = lasso_m1 * x1
-lasso_m2 = (N * np.sum(x2 * (y - lasso_y_pred1)) - np.sum(x2) * np.sum(y - lasso_y_pred1)) / (N * np.sum(x2 ** 2) + alpha - (np.sum(x2) ** 2))
-lasso_b = np.mean(y) - (lasso_m1 * np.mean(x1) + lasso_m2 * np.mean(x2))
+lasso_m = (N * np.sum(x * y) - np.sum(x) * np.sum(y)) / (N * np.sum(x ** 2) + alpha - (np.sum(x) ** 2))
+lasso_b = np.mean(y) - (lasso_m * np.mean(x))
 
 # Hàm dự đoán cho hồi quy Lasso
-def predict_gold_price_lasso(open_value: float, vol_value: float) -> float:
-    return lasso_m1 * open_value + lasso_m2 * vol_value + lasso_b
+def predict_gold_price_lasso(open_value: float) -> float:
+    return lasso_m * open_value + lasso_b
 
 # Sử dụng hàm Lasso trong thư viện scikit-learn
 lasso_model = Lasso(alpha=alpha, max_iter=1000)
 lasso_model.fit(X, y)
 
 # Hàm dự đoán cho Lasso (scikit-learn)
-def predict_gold_price_lasso_sklearn(open_value: float, vol_value: float) -> float:
-    return lasso_model.predict(np.array([[open_value, vol_value]]))[0]
+def predict_gold_price_lasso_sklearn(open_value: float) -> float:
+    return lasso_model.predict(np.array([[open_value]]))[0]
 
 # Mạng nơ-ron hồi quy với ReLU
-neural_model = MLPRegressor(hidden_layer_sizes=(64, 32), max_iter=1000, activation='relu', solver='adam', random_state=0)
+neural_model = MLPRegressor(hidden_layer_sizes=(500, 300), max_iter=1000, activation='relu', solver='adam', random_state=0)
 neural_model.fit(X, y)
 
 # Hàm dự đoán cho mạng nơ-ron
-def predict_gold_price_neural(open_value: float, vol_value: float) -> float:
-    return neural_model.predict(np.array([[open_value, vol_value]]))[0]
+def predict_gold_price_neural(open_value: float) -> float:
+    return neural_model.predict(np.array([[open_value]]))[0]
 
 # Hàm bagging
 def bagging_regression(X, y):
@@ -92,30 +86,28 @@ def bagging_regression(X, y):
 bagging_model = bagging_regression(X, y)
 
 # Dự đoán giá vàng bằng bagging
-def predict_gold_price_bagging(open_value: float, vol_value: float) -> float:
-    return bagging_model.predict([[open_value, vol_value]])[0]
+def predict_gold_price_bagging(open_value: float) -> float:
+    return bagging_model.predict([[open_value]])[0]
 
 class PredictionInput(BaseModel):
     open: float
-    vol: float
 
 # Endpoint dự đoán giá vàng
 @app.post("/predict")
 async def predict(input_data: PredictionInput):
     open_value = input_data.open
-    vol_value = input_data.vol
 
     try:
         # Dự đoán giá vàng
-        predicted_linear = predict_gold_price_linear(open_value, vol_value)
-        predicted_lasso = predict_gold_price_lasso(open_value, vol_value)
-        predicted_lasso_sklearn = predict_gold_price_lasso_sklearn(open_value, vol_value)
-        predicted_neural = predict_gold_price_neural(open_value, vol_value)
-        predicted_bagging = predict_gold_price_bagging(open_value, vol_value)
+        predicted_linear = predict_gold_price_linear(open_value)
+        predicted_lasso = predict_gold_price_lasso(open_value)
+        predicted_lasso_sklearn = predict_gold_price_lasso_sklearn(open_value)
+        predicted_neural = predict_gold_price_neural(open_value)
+        predicted_bagging = predict_gold_price_bagging(open_value)
 
         # Tính MSE và R^2 cho từng phương pháp
-        mse_linear = mean_squared_error(y, [predict_gold_price_linear(X[i, 0], X[i, 1]) for i in range(len(y))])
-        r2_linear = r2_score(y, [predict_gold_price_linear(X[i, 0], X[i, 1]) for i in range(len(y))])
+        mse_linear = mean_squared_error(y, [predict_gold_price_linear(X[i, 0]) for i in range(len(y))])
+        r2_linear = r2_score(y, [predict_gold_price_linear(X[i, 0]) for i in range(len(y))])
 
         mse_lasso = mean_squared_error(y, lasso_model.predict(X))
         r2_lasso = r2_score(y, lasso_model.predict(X))
@@ -196,10 +188,6 @@ async def get_form():
                         <label for="open">Giá mở cửa:</label>
                         <input type="number" id="open" class="form-control" step="any" required>
                     </div>
-                    <div class="form-group">
-                        <label for="vol">VoL (K):</label>
-                        <input type="number" id="vol" class="form-control" step="any" required>
-                    </div>
                     <button type="button" class="btn btn-primary" onclick="predict()">Dự đoán</button>
                 </form>
             </div>
@@ -211,46 +199,28 @@ async def get_form():
         <script>
             async function predict() {
                 const open = parseFloat(document.getElementById("open").value);
-                const vol = parseFloat(document.getElementById("vol").value);
                 const response = await fetch("/predict", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json"
                     },
-                    body: JSON.stringify({ open, vol })
+                    body: JSON.stringify({ open: open })
                 });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    document.getElementById('result').innerHTML = `
-                        <h4>Kết quả dự đoán:</h4>
-                        <p>Giá vàng dự đoán theo Hồi quy tuyến tính: ${data["Kết quả dự đoán"]["Giá vàng dự đoán theo Hồi quy tuyến tính"].toFixed(2)} USD</p>
-                        <p>Giá vàng dự đoán theo Hồi quy Lasso: ${data["Kết quả dự đoán"]["Giá vàng dự đoán theo Hồi quy Lasso"].toFixed(2)} USD</p>
-                        <p>Giá vàng dự đoán theo Hồi quy Lasso (sklearn): ${data["Kết quả dự đoán"]["Giá vàng dự đoán theo Hồi quy Lasso (sklearn)"].toFixed(2)} USD</p>
-                        <p>Giá vàng dự đoán theo Neural Network (ReLU): ${data["Kết quả dự đoán"]["Giá vàng dự đoán theo Neural Network (ReLU)"].toFixed(2)} USD</p>
-                        <p>Giá vàng dự đoán theo Bagging: ${data["Kết quả dự đoán"]["Giá vàng dự đoán theo Bagging"].toFixed(2)} USD</p>
-                        <div>
-                            <h5>MSE và R²:</h5>
-                            <p>MSE Hồi quy tuyến tính: ${data["MSE và R²"]["MSE Hồi quy tuyến tính"].toFixed(2)}</p>
-                            <p>R² Hồi quy tuyến tính: ${data["MSE và R²"]["R² Hồi quy tuyến tính"].toFixed(2)}</p>
-                            <p>MSE Hồi quy Lasso: ${data["MSE và R²"]["MSE Hồi quy Lasso"].toFixed(2)}</p>
-                            <p>R² Hồi quy Lasso: ${data["MSE và R²"]["R² Hồi quy Lasso"].toFixed(2)}</p>
-                            <p>MSE Neural Network (ReLU): ${data["MSE và R²"]["MSE Neural Network (ReLU)"].toFixed(2)}</p>
-                            <p>R² Neural Network (ReLU): ${data["MSE và R²"]["R² Neural Network (ReLU)"].toFixed(2)}</p>
-                            <p>MSE Bagging: ${data["MSE và R²"]["MSE Bagging"].toFixed(2)}</p>
-                            <p>R² Bagging: ${data["MSE và R²"]["R² Bagging"].toFixed(2)}</p>
-                        </div>
-                    `;
-                } else {
-                    const error = await response.json();
-                    document.getElementById('result').innerHTML = `<h4>Lỗi:</h4><p>${error.detail}</p>`;
+                const data = await response.json();
+                const resultDiv = document.getElementById("result");
+                resultDiv.innerHTML = "<h4>Kết quả dự đoán:</h4>";
+                for (const [key, value] of Object.entries(data["Kết quả dự đoán"])) {
+                    resultDiv.innerHTML += `<p>${key}: ${value.toFixed(4)}</p>`;
+                }
+                resultDiv.innerHTML += "<h4>MSE và R²:</h4>";
+                for (const [key, value] of Object.entries(data["MSE và R²"])) {
+                    resultDiv.innerHTML += `<p>${key}: ${value.toFixed(4)}</p>`;
                 }
             }
         </script>
     </body>
     </html>
     """
-
 # Chạy ứng dụng
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
