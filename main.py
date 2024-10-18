@@ -30,7 +30,8 @@ df = preprocess_data(df)
 X = df[['Open']].values  # Chỉ giữ lại cột 'Open'
 y = df['Price'].values
 alpha = 0.1  # Tham số alpha cho hồi quy Lasso
-
+# Chia tập dữ liệu thành tập huấn luyện và tập kiểm tra (80% huấn luyện, 20% kiểm tra)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 # Tính toán tham số hồi quy tuyến tính
 def linear_regression(X, y):
     x = X[:, 0]  # Giá mở cửa
