@@ -18,8 +18,7 @@ app = FastAPI()
 df = pd.read_csv("Gia_Vang_2019_2022.csv")
 df.columns = ["Date", "Price", "Open", "Vol"]
 
-# Chia tập dữ liệu thành tập huấn luyện và tập kiểm tra (80% huấn luyện, 20% kiểm tra)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
 
 # Tiền xử lý dữ liệu
 def preprocess_data(df):
@@ -34,6 +33,8 @@ df = preprocess_data(df)
 X = df[['Open']].values  # Chỉ giữ lại cột 'Open'
 y = df['Price'].values
 alpha = 0.1  # Tham số alpha cho hồi quy Lasso
+# Chia tập dữ liệu thành tập huấn luyện và tập kiểm tra (80% huấn luyện, 20% kiểm tra)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # Tính toán tham số hồi quy tuyến tính
 def linear_regression(X, y):
