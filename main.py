@@ -7,9 +7,9 @@ import matplotlib.pyplot as plt
 from fastapi import HTTPException
 from sklearn.linear_model import Lasso
 from sklearn.ensemble import BaggingRegressor
+from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPRegressor
 from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.model_selection import train_test_split
 import numpy as np
 
 app = FastAPI()
@@ -82,7 +82,7 @@ def predict_gold_price_neural(open_value: float) -> float:
 
 # Hàm bagging
 def bagging_regression(X, y):
-    base_model = MLPRegressor(hidden_layer_sizes=(10,), max_iter=1000, random_state=42)
+    base_model = MLPRegressor(hidden_layer_sizes=(500,300), max_iter=1000, random_state=42)
     bagging_model = BaggingRegressor(estimator=base_model, n_estimators=10, random_state=42)
     bagging_model.fit(X, y)
     return bagging_model
@@ -94,28 +94,38 @@ bagging_model = bagging_regression(X, y)
 def predict_gold_price_bagging(open_value: float) -> float:
     return bagging_model.predict([[open_value]])[0]
 
+# Hàm để dự đoán giá vàng bằng cách kết hợp tất cả các mô hình
+def predict_gold_price_combined(open_value: float) -> float:
+    pred_linear = predict_gold_price_linear(open_value)
+    pred_lasso = predict_gold_price_lasso(open_value)
+    pred_neural = predict_gold_price_neural(open_value)
+
+    # Tính giá trị trung bình
+    return np.mean([pred_linear, pred_lasso, pred_neural])
+
 class PredictionInput(BaseModel):
     open: float
 
-# Endpoint dự đoán giá vàng
 @app.post("/predict")
 async def predict(input_data: PredictionInput):
     open_value = input_data.open
 
     try:
-        # Dự đoán giá vàng
         predicted_linear = predict_gold_price_linear(open_value)
         predicted_lasso = predict_gold_price_lasso(open_value)
         predicted_lasso_sklearn = predict_gold_price_lasso_sklearn(open_value)
         predicted_neural = predict_gold_price_neural(open_value)
         predicted_bagging = predict_gold_price_bagging(open_value)
+        predicted_combined = predict_gold_price_combined(open_value)
 
-        # Tính MSE và R^2 cho từng phương pháp
         mse_linear = mean_squared_error(y, [predict_gold_price_linear(X[i, 0]) for i in range(len(y))])
         r2_linear = r2_score(y, [predict_gold_price_linear(X[i, 0]) for i in range(len(y))])
 
-        mse_lasso = mean_squared_error(y, lasso_model.predict(X))
-        r2_lasso = r2_score(y, lasso_model.predict(X))
+        mse_lasso = mean_squared_error(y, [predict_gold_price_lasso(X[i, 0]) for i in range(len(y))])
+        r2_lasso = r2_score(y, [predict_gold_price_lasso(X[i, 0]) for i in range(len(y))])
+
+        mse_lasso_tv = mean_squared_error(y, lasso_model.predict(X))
+        r2_lasso_tv = r2_score(y, lasso_model.predict(X))
 
         mse_nn = mean_squared_error(y, neural_model.predict(X))
         r2_nn = r2_score(y, neural_model.predict(X))
@@ -123,30 +133,37 @@ async def predict(input_data: PredictionInput):
         mse_bagging = mean_squared_error(y, bagging_model.predict(X))
         r2_bagging = r2_score(y, bagging_model.predict(X))
 
-        # Trả về kết quả theo định dạng mong muốn
+        mse_bagging_kethop = mean_squared_error(y, [predict_gold_price_combined(X[i, 0]) for i in range(len(y))])
+        r2_bagging_kethop = r2_score(y, [predict_gold_price_combined(X[i, 0]) for i in range(len(y))])
+
         return {
             "Kết quả dự đoán": {
                 "Giá vàng dự đoán theo Hồi quy tuyến tính": predicted_linear,
                 "Giá vàng dự đoán theo Hồi quy Lasso": predicted_lasso,
                 "Giá vàng dự đoán theo Hồi quy Lasso (sklearn)": predicted_lasso_sklearn,
                 "Giá vàng dự đoán theo Neural Network (ReLU)": predicted_neural,
-                "Giá vàng dự đoán theo Bagging": predicted_bagging
+                "Giá vàng dự đoán theo Bagging": predicted_bagging,
+                "Giá vàng dự đoán theo cách kết hợp": predicted_combined
             },
             "MSE và R²": {
                 "MSE Hồi quy tuyến tính": mse_linear,
                 "R² Hồi quy tuyến tính": r2_linear,
                 "MSE Hồi quy Lasso": mse_lasso,
                 "R² Hồi quy Lasso": r2_lasso,
+                "MSE Hồi quy Lasso (sklearn)": mse_lasso_tv,
+                "R² Hồi quy Lasso(sklearn)": r2_lasso_tv,
                 "MSE Neural Network (ReLU)": mse_nn,
                 "R² Neural Network (ReLU)": r2_nn,
                 "MSE Bagging": mse_bagging,
-                "R² Bagging": r2_bagging
+                "R² Bagging": r2_bagging,
+                "MSE Bagging (Kết hợp)": mse_bagging_kethop,
+                "R² Bagging (Kết hợp)": r2_bagging_kethop
             }
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# Trang chính với form nhập liệu
+
 @app.get("/", response_class=HTMLResponse)
 async def get_form():
     return """
@@ -215,11 +232,11 @@ async def get_form():
                 const resultDiv = document.getElementById("result");
                 resultDiv.innerHTML = "<h4>Kết quả dự đoán:</h4>";
                 for (const [key, value] of Object.entries(data["Kết quả dự đoán"])) {
-                    resultDiv.innerHTML += `<p>${key}: ${value.toFixed(4)}</p>`;
+                    resultDiv.innerHTML += `<p>${key}: ${value.toFixed(6)}</p>`;
                 }
                 resultDiv.innerHTML += "<h4>MSE và R²:</h4>";
                 for (const [key, value] of Object.entries(data["MSE và R²"])) {
-                    resultDiv.innerHTML += `<p>${key}: ${value.toFixed(4)}</p>`;
+                    resultDiv.innerHTML += `<p>${key}: ${value.toFixed(6)}</p>`;
                 }
             }
         </script>
