@@ -1,3 +1,4 @@
+from re import X
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -14,11 +15,8 @@ import numpy as np
 
 app = FastAPI()
 
-# Đọc dữ liệu từ tệp CSV
-df = pd.read_csv("Gia_Vang_2019_2022.csv")
+df = pd.read_csv("Gia_Vang_2018_2020.csv")
 df.columns = ["Date", "Price", "Open", "Vol"]
-
-
 
 # Tiền xử lý dữ liệu
 def preprocess_data(df):
