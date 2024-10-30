@@ -16,7 +16,7 @@ import uvicorn
 
 app = FastAPI()
 
-df = pd.read_csv("Gia_Vang_2019_2020.csv")
+df = pd.read_csv("Gia_Vang_2019_2022.csv")
 df.columns = ["Date", "Price", "Open", "Vol"]
 
 # Tiền xử lý dữ liệu
